@@ -100,8 +100,8 @@ class WebViewClient extends android.webkit.WebViewClient {
             return super.shouldInterceptRequest(view, request);
         }
         String path = request.getUrl().getPath();
-        if ("/".equals(path)) {
-            path = "index.html";
+        if ("/pwa/".equals(path)) {
+            path = "/pwa/index.html";
         } else {
             // remove trailing slash
             path = path.substring(1);
