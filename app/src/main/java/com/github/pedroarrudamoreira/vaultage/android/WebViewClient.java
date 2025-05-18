@@ -2,15 +2,17 @@ package com.github.pedroarrudamoreira.vaultage.android;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.AssetManager;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Build;
 import android.security.KeyChain;
 import android.security.KeyChainAliasCallback;
 import android.util.Base64;
 import android.util.Log;
 import android.util.Pair;
 import android.webkit.ClientCertRequest;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
 import java.io.ByteArrayOutputStream;
@@ -18,14 +20,54 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.util.HashMap;
+import java.util.Map;
 
 class WebViewClient extends android.webkit.WebViewClient {
 
+    static private class ContentType {
+        private final String mime;
+        private final String encoding;
+
+        private ContentType(String mime, String encoding) {
+            this.mime = mime;
+            this.encoding = encoding;
+        }
+    }
+
+    private static final Map<String, ContentType> MIME_TYPES = new HashMap<>();
+
+    static {
+        MIME_TYPES.put(".js", new ContentType("application/javascript", "utf-8"));
+        MIME_TYPES.put(".html", new ContentType("text/html", "utf-8"));
+        MIME_TYPES.put(".css", new ContentType("text/css", "utf-8"));
+        MIME_TYPES.put(".png", new ContentType("image/png", null));
+        MIME_TYPES.put(".jpg", new ContentType("image/jpeg", null));
+        MIME_TYPES.put(".jpeg", new ContentType("image/jpeg", null));
+        MIME_TYPES.put(".gif", new ContentType("image/gif", null));
+        MIME_TYPES.put(".ico", new ContentType("image/x-icon", null));
+        MIME_TYPES.put(".json", new ContentType("application/json", "utf-8"));
+        MIME_TYPES.put(".woff2", new ContentType("font/woff2", null));
+    }
+
+    private static ContentType getMimeType(String url) {
+        // Get the file extension from the URL
+        int lastDotIndex = url.lastIndexOf(".");
+        if (lastDotIndex == -1) {
+            return null;
+        }
+        String extension = url.substring(lastDotIndex);
+
+        // Check if the file extension is in the table of well-known MIME types
+        return MIME_TYPES.get(extension);
+    }
+
+
     private final Uri serverUri;
     private final String customJS;
-    private final Activity activity;
+    private final MainActivity activity;
 
-    public WebViewClient(Uri serverUri, InputStream customJs, Activity activity) throws IOException {
+    public WebViewClient(Uri serverUri, InputStream customJs, MainActivity activity) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         int read;
         byte[] buffer = new byte[512];
@@ -52,7 +94,47 @@ class WebViewClient extends android.webkit.WebViewClient {
         return true;
     }
 
-    /** <a href="https://github.com/gonativeio/gonative-android">https://github.com/gonativeio/gonative-android</a> */
+    @Override
+    public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+        if(!activity.isOfflineModeEnabled()) {
+            return super.shouldInterceptRequest(view, request);
+        }
+        String path = request.getUrl().getPath();
+        if ("/".equals(path)) {
+            path = "index.html";
+        } else {
+            // remove trailing slash
+            path = path.substring(1);
+        }
+        // Check if the request is for a resource with one of the specified MIME types
+        ContentType contentType = getMimeType(path);
+        AssetManager assetManager = view.getContext().getAssets();
+        InputStream fileContent;
+        try {
+            if (contentType != null) {
+                fileContent = assetManager.open(path);
+            } else {
+                fileContent = null;
+            }
+        } catch (IOException e) {
+            fileContent = null;
+        }
+        // Check if the file exists at the given path
+        if (fileContent != null) {
+            return new WebResourceResponse(
+                    contentType.mime,
+                    contentType.encoding,
+                    fileContent
+            );
+        }
+        // Proceed with the default behavior of loading the URL
+        return super.shouldInterceptRequest(view, request);
+    }
+
+
+    /**
+     * <a href="https://github.com/gonativeio/gonative-android">https://github.com/gonativeio/gonative-android</a>
+     */
     @Override
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
@@ -68,7 +150,9 @@ class WebViewClient extends android.webkit.WebViewClient {
         view.evaluateJavascript(js, null);
     }
 
-    /** <a href="https://github.com/gonativeio/gonative-android">https://github.com/gonativeio/gonative-android</a> */
+    /**
+     * <a href="https://github.com/gonativeio/gonative-android">https://github.com/gonativeio/gonative-android</a>
+     */
     @Override
     public void onReceivedClientCertRequest(WebView view, ClientCertRequest request) {
 
@@ -85,7 +169,9 @@ class WebViewClient extends android.webkit.WebViewClient {
                 request.getPort(), null);
     }
 
-    /** <a href="https://github.com/gonativeio/gonative-android">https://github.com/gonativeio/gonative-android</a> */
+    /**
+     * <a href="https://github.com/gonativeio/gonative-android">https://github.com/gonativeio/gonative-android</a>
+     */
     private static class GetKeyTask extends AsyncTask<String, Void, Pair<PrivateKey, X509Certificate[]>> {
         private Activity activity;
         private ClientCertRequest request;

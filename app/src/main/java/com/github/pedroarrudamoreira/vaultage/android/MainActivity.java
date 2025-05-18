@@ -2,6 +2,7 @@ package com.github.pedroarrudamoreira.vaultage.android;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.SharedPreferences;
 import android.content.res.AssetManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -11,14 +12,22 @@ import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.widget.CheckBox;
 
 import java.io.IOException;
 
 public class MainActivity extends Activity {
 
+    private static final String OFFLINE = "offline";
     private WebView webView;
 
-    private static class ColorChanger {
+    private CheckBox checkBox;
+
+    boolean isOfflineModeEnabled() {
+        return checkBox.isChecked();
+    }
+
+    private class ColorChanger {
 
         private final Window window;
 
@@ -27,7 +36,10 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface
         public void set(String color) {
-            window.setStatusBarColor(Color.parseColor("#" + color));
+            int colorCode = Color.parseColor("#" + color);
+            window.setStatusBarColor(colorCode);
+            checkBox.setBackgroundColor(colorCode);
+            checkBox.setTextColor(Color.WHITE);
         }
     }
 
@@ -51,6 +63,12 @@ public class MainActivity extends Activity {
 
         Uri serverUri = Uri.parse(serverAddress);
         webView = findViewById(R.id.activity_main_webview);
+        checkBox = findViewById(R.id.checkBox);
+        final SharedPreferences preferences = getPreferences(MODE_PRIVATE);
+        checkBox.setChecked(preferences.getBoolean(OFFLINE, false));
+        checkBox.setOnCheckedChangeListener((button, checked) -> {
+            preferences.edit().putBoolean(OFFLINE, checked).apply();
+        });
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
